@@ -88,6 +88,12 @@ function render() {
    } else if(row.registration_number) {
     actionCell.textContent=row.registration_number;
    } else { actionCell.textContent="—"; }
+   const del=document.createElement("button");
+   del.textContent="Delete";
+   del.style.background="#b42318";
+   del.style.marginTop="6px";
+   del.addEventListener("click",()=>deleteRegistration(activeTab,row.id,row.full_name));
+   actionCell.append(del);
    tr.append(actionCell);
    $("tableBody").append(tr);
   });
@@ -101,6 +107,14 @@ async function updatePayment(tab,id,status) {
  const table=tab==="rent"?"taxi_rent_registrations":"taxi_driver_job_registrations";
  const {error}=await supabase.from(table).update({payment_status:status}).eq("id",id);
  if(error){message($("loadError"),"પેમેન્ટ અપડેટ થયું નથી: "+error.message);return;}
+ await loadData();
+}
+async function deleteRegistration(tab,id,name) {
+ const confirmed=window.confirm("શું તમે "+(name||"આ રજિસ્ટ્રેશન")+" ની હિસ્ટ્રી કાયમ માટે ડિલીટ કરવા માંગો છો? આ કાર્યવાહી પાછી ફેરવી શકાશે નહીં.");
+ if(!confirmed) return;
+ const table=tab==="rent"?"taxi_rent_registrations":"taxi_driver_job_registrations";
+ const {error}=await supabase.from(table).delete().eq("id",id);
+ if(error){message($("loadError"),"હિસ્ટ્રી ડિલીટ થઈ નથી: "+error.message);return;}
  await loadData();
 }
 async function loadData() {
