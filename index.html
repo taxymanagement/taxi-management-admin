@@ -43,10 +43,10 @@ let activeTab = "rent";
 let registrations = { rent: [], driver: [] };
 const columns = {
  rent: [
-  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],["vehicle_name","ગાડી"],["vehicle_year","વર્ષ"],["payment_status","પેમેન્ટ"],["created_at","તારીખ"]
+  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],["vehicle_name","ગાડી"],["vehicle_year","વર્ષ"],["payment_status","પેમેન્ટ"],["payment_reference","UTR નંબર"],["created_at","તારીખ"]
  ],
  driver: [
-  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],["license_number","લાયસન્સ"],["payment_status","પેમેન્ટ"],["created_at","તારીખ"]
+  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],["license_number","લાયસન્સ"],["payment_status","પેમેન્ટ"],["payment_reference","UTR નંબર"],["created_at","તારીખ"]
  ]
 };
 function message(el, text) { el.textContent = text; el.classList.remove("hidden"); }
@@ -63,6 +63,7 @@ function render() {
  $("tableHead").replaceChildren();
  const trh = document.createElement("tr");
  columns[activeTab].forEach(([key,label]) => { const th=document.createElement("th"); th.textContent=label; trh.append(th); });
+ const actionHead=document.createElement("th"); actionHead.textContent="કાર્યवाही"; trh.append(actionHead);
  $("tableHead").append(trh);
  $("tableBody").replaceChildren();
  if (!rows.length) {
@@ -77,6 +78,17 @@ function render() {
     if(key==="payment_status"){td.replaceChildren();const badge=document.createElement("span");badge.className="status";badge.textContent=value==="paid"?"ચૂકવેલ":value==="failed"?"નિષ્ફળ":value==="refunded"?"રિફંડ":"બાકી";td.append(badge);}
     tr.append(td);
    });
+   const actionCell=document.createElement("td");
+   if(row.payment_status==="pending"){
+    const approve=document.createElement("button"); approve.textContent="Approve"; approve.style.marginRight="6px";
+    approve.addEventListener("click",()=>updatePayment(activeTab,row.id,"paid"));
+    const reject=document.createElement("button"); reject.textContent="Reject"; reject.className="secondary";
+    reject.addEventListener("click",()=>updatePayment(activeTab,row.id,"failed"));
+    actionCell.append(approve,reject);
+   } else if(row.registration_number) {
+    actionCell.textContent=row.registration_number;
+   } else { actionCell.textContent="—"; }
+   tr.append(actionCell);
    $("tableBody").append(tr);
   });
  }
@@ -85,11 +97,17 @@ function render() {
  $("driverTotal").textContent=registrations.driver.length;
  $("lastUpdated").textContent="છેલ્લું અપડેટ: "+new Date().toLocaleTimeString("gu-IN");
 }
+async function updatePayment(tab,id,status) {
+ const table=tab==="rent"?"taxi_rent_registrations":"taxi_driver_job_registrations";
+ const {error}=await supabase.from(table).update({payment_status:status}).eq("id",id);
+ if(error){message($("loadError"),"પેમેન્ટ અપડેટ થયું નથી: "+error.message);return;}
+ await loadData();
+}
 async function loadData() {
  $("loadError").classList.add("hidden");
  const [rent,driver] = await Promise.all([
-  supabase.from("taxi_rent_registrations").select("registration_number,full_name,mobile,address,vehicle_name,vehicle_year,payment_status,created_at").order("created_at",{ascending:false}),
-  supabase.from("taxi_driver_job_registrations").select("registration_number,full_name,mobile,address,license_number,payment_status,created_at").order("created_at",{ascending:false})
+  supabase.from("taxi_rent_registrations").select("id,registration_number,full_name,mobile,address,vehicle_name,vehicle_year,payment_status,payment_reference,created_at").order("created_at",{ascending:false}),
+  supabase.from("taxi_driver_job_registrations").select("id,registration_number,full_name,mobile,address,license_number,payment_status,payment_reference,created_at").order("created_at",{ascending:false})
  ]);
  if(rent.error || driver.error){message($("loadError"),"ડેટા લોડ થઈ શક્યો નથી: "+(rent.error?.message||driver.error?.message));return;}
  registrations={rent:rent.data||[],driver:driver.data||[]};render();
