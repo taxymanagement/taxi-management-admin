@@ -19,7 +19,7 @@
 <p class="small">આ ડેશબોર્ડમાં પ્રવેશ માટે Supabase Auth user પર app_metadata role = admin હોવું જરૂરી છે.</p>
 </section>
 <section id="dashboard" class="hidden">
-<div class="bar"><div><h1>Admin Dashboard</h1><p class="muted">રજિસ્ટ્રેશનની વિગતો અને પેમેન્ટ સ્ટેટસ</p></div><button id="refresh" class="secondary">Refresh</button></div>
+<div class="bar"><div><h1>Admin Dashboard</h1><p class="muted">રજિસ્ટ્રેશનની વિગતો અને પેમેન્ટ સ્ટેટસ</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="exportExcel" class="secondary">Excel ડાઉનલોડ</button><button id="exportPdf" class="secondary">PDF બનાવો</button><button id="refresh" class="secondary">Refresh</button></div></div>
 <div class="stats">
 <div class="card stat"><span class="muted">કુલ રજિસ્ટ્રેશન</span><strong id="total">0</strong></div>
 <div class="card stat"><span class="muted">Taxi Rent</span><strong id="rentTotal">0</strong></div>
@@ -126,6 +126,54 @@ async function loadData() {
  if(rent.error || driver.error){message($("loadError"),"ડેટા લોડ થઈ શક્યો નથી: "+(rent.error?.message||driver.error?.message));return;}
  registrations={rent:rent.data||[],driver:driver.data||[]};render();
 }
+const exportColumns = {
+ rent: [
+  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],
+  ["vehicle_name","ગાડીનું નામ"],["vehicle_year","ગાડીનું વર્ષ"],["payment_amount","ફી"],["payment_status","પેમેન્ટ સ્ટેટસ"],
+  ["payment_reference","UTR નંબર"],["created_at","રજીસ્ટ્રેશન તારીખ"]
+ ],
+ driver: [
+  ["registration_number","રજિસ્ટ્રેશન નંબર"],["full_name","નામ"],["mobile","મોબાઇલ"],["address","સરનામું"],
+  ["license_number","લાયસન્સ નંબર"],["payment_amount","ફી"],["payment_status","પેમેન્ટ સ્ટેટસ"],
+  ["payment_reference","UTR નંબર"],["created_at","રજીસ્ટ્રેશન તારીખ"]
+ ]
+};
+function exportRows(tab) {
+ return registrations[tab].map(row => Object.fromEntries(exportColumns[tab].map(([key,label]) => [
+  label, key==="created_at" ? fmtDate(row[key]) : key==="payment_status" ?
+   (row[key]==="paid"?"ચૂકવેલ":row[key]==="failed"?"નિષ્ફળ":row[key]==="refunded"?"રિફંડ":"બાકી") : (row[key] ?? "")
+ ])));
+}
+async function downloadExcel() {
+ try {
+  const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+  const workbook=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(exportRows("rent")),"Taxi Rent");
+  XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(exportRows("driver")),"Driver Job");
+  XLSX.writeFile(workbook,"Taxi_Registration_History.xlsx");
+ } catch(error) {
+  message($("loadError"),"Excel ફાઇલ બનાવી શકાઈ નથી. ઇન્ટરનેટ કનેક્શન તપાસો અને ફરી પ્રયાસ કરો.");
+ }
+}
+function escapeHtml(value) {
+ return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+}
+function printHistoryPdf() {
+ const popup=window.open("","_blank");
+ if(!popup){message($("loadError"),"PDF બનાવવા માટે બ્રાઉઝરમાં pop-up મંજૂર કરો.");return;}
+ const section=(tab,title)=>{
+  const headers=exportColumns[tab].map(([,label])=>"<th>"+escapeHtml(label)+"</th>").join("");
+  const rows=registrations[tab].map(row=>"<tr>"+exportColumns[tab].map(([key])=>"<td>"+escapeHtml(key==="created_at"?fmtDate(row[key]):key==="payment_status"?(row[key]==="paid"?"ચૂકવેલ":row[key]==="failed"?"નિષ્ફળ":row[key]==="refunded"?"રિફંડ":"બાકી"):(row[key]??""))+"</td>").join("")+"</tr>").join("");
+  return "<h2>"+title+"</h2><table><thead><tr>"+headers+"</tr></thead><tbody>"+(rows||'<tr><td colspan="'+exportColumns[tab].length+'">કોઈ રેકોર્ડ નથી</td></tr>')+"</tbody></table>";
+ };
+ popup.document.open();
+ popup.document.write(`<!doctype html><html lang="gu"><head><meta charset="utf-8"><title>Taxi Registration History</title><style>
+ body{font-family:Arial,"Noto Sans Gujarati",sans-serif;color:#172033;padding:20px}h1{text-align:center}h2{margin-top:28px}table{border-collapse:collapse;width:100%;font-size:10px;margin-bottom:24px}th,td{border:1px solid #9aa4b2;padding:6px;text-align:left;overflow-wrap:anywhere}th{background:#edf1f7}@page{size:landscape;margin:10mm}@media print{body{padding:0}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid;break-after:auto}}
+ </style></head><body><h1>Taxi Management - Registration History</h1><p>રિપોર્ટ તારીખ: ${escapeHtml(new Date().toLocaleString("gu-IN"))}</p>${section("rent","Taxi Rent હિસ્ટ્રી")}${section("driver","Driver Job હિસ્ટ્રી")}<script>window.onload=()=>window.print();<\/script></body></html>`);
+ popup.document.close();
+}
+$("exportExcel").addEventListener("click",downloadExcel);
+$("exportPdf").addEventListener("click",printHistoryPdf);
 async function showSession() {
  const {data:{session}}=await supabase.auth.getSession();
  if(!session){$("loginCard").classList.remove("hidden");$("dashboard").classList.add("hidden");$("logout").classList.add("hidden");return;}
