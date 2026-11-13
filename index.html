@@ -67,7 +67,7 @@ function render() {
  $("tableHead").append(trh);
  $("tableBody").replaceChildren();
  if (!rows.length) {
-  const tr=document.createElement("tr"),td=document.createElement("td"); td.colSpan=columns[activeTab].length;td.className="empty";td.textContent="હજુ કોઈ રજિસ્ટ્રેશન મળ્યું નથી.";tr.append(td);$("tableBody").append(tr);
+  const tr=document.createElement("tr"),td=document.createElement("td"); td.colSpan=columns[activeTab].length+1;td.className="empty";td.textContent="હજુ કોઈ રજિસ્ટ્રેશન મળ્યું નથી.";tr.append(td);$("tableBody").append(tr);
  } else {
   rows.forEach(row => {
    const tr=document.createElement("tr");
